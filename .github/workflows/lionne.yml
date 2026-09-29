@@ -1,0 +1,124 @@
+name: Lionne tracker
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"     # na svakih 5 minuta (GitHub ume da kasni par minuta)
+  workflow_dispatch:           # dugme "Run workflow" za ručno pokretanje
+
+permissions:
+  contents: write
+
+concurrency:
+  group: lionne-tracker
+  cancel-in-progress: false
+
+jobs:
+  proveri:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instaliraj biblioteku
+        run: pip install python-a2s
+
+      - name: Proveri server
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SERVER_IP: "5.181.187.33"
+          SERVER_PORT: "27018"
+          IGRACI: "1 Lionne"          # više igrača odvojiti zarezom: "1 Lionne, Neko Drugi"
+        run: |
+          python - <<'KRAJ'
+          import os, json, time, urllib.request, urllib.parse
+          from datetime import datetime, timezone, timedelta
+          import a2s
+
+          SERVER = (os.environ["SERVER_IP"], int(os.environ["SERVER_PORT"]))
+          IGRACI = [i.strip() for i in os.environ["IGRACI"].split(",") if i.strip()]
+          TOKEN = os.environ.get("TELEGRAM_TOKEN")
+          CHAT = os.environ.get("TELEGRAM_CHAT_ID")
+          STANJE = "stanje.json"
+          BG = timezone(timedelta(hours=2))
+
+          def norm(s):
+              return " ".join(s.split()).lower()
+
+          def sat():
+              return datetime.now(BG).strftime("%H:%M")
+
+          def trajanje(sek):
+              m = int(sek) // 60
+              return f"{m // 60}h {m % 60}min" if m >= 60 else f"{m} min"
+
+          def posalji(tekst):
+              print("PORUKA:", tekst)
+              if not (TOKEN and CHAT):
+                  print("Telegram nije podešen (fale secrets).")
+                  return
+              try:
+                  data = urllib.parse.urlencode({"chat_id": CHAT, "text": tekst}).encode()
+                  urllib.request.urlopen(f"https://api.telegram.org/bot{TOKEN}/sendMessage", data=data, timeout=15)
+              except Exception as e:
+                  print("Telegram greška:", e)
+
+          def igraci_na_serveru():
+              poslednja = None
+              for _ in range(3):
+                  try:
+                      try:
+                          lista = a2s.players(SERVER, timeout=5, encoding="utf-8")
+                          return {norm(p.name): p for p in lista if p.name}
+                      except UnicodeDecodeError:
+                          lista = a2s.players(SERVER, timeout=5, encoding=None)
+                          return {norm(p.name.decode("utf-8", "replace")): p for p in lista if p.name}
+                  except Exception as e:
+                      poslednja = e
+                      time.sleep(3)
+              raise poslednja
+
+          prvi_put = not os.path.exists(STANJE)
+          stanje = {"online": {}} if prvi_put else json.load(open(STANJE, encoding="utf-8"))
+
+          try:
+              na_serveru = igraci_na_serveru()
+          except Exception as e:
+              print("Server ne odgovara, ova provera se preskače:", repr(e))
+              raise SystemExit(0)
+
+          print(f"Na serveru ({len(na_serveru)}):", ", ".join(sorted(na_serveru)) or "niko")
+          sada = time.time()
+
+          for ime in IGRACI:
+              k = norm(ime)
+              if k in na_serveru and k not in stanje["online"]:
+                  stanje["online"][k] = sada
+                  if not prvi_put:
+                      posalji(f"🟢 {ime} je UŠAO na server ({sat()})")
+              elif k not in na_serveru and k in stanje["online"]:
+                  poceo = stanje["online"].pop(k)
+                  posalji(f"🔴 {ime} je IZAŠAO sa servera ({sat()}), igrao ~{trajanje(sada - poceo)}")
+
+          if prvi_put:
+              status = "\n".join(
+                  f"{'🟢 online' if norm(i) in na_serveru else '⚪ offline'}: {i}" for i in IGRACI
+              )
+              posalji(f"✅ Praćenje radi! Server odgovara, na njemu je {len(na_serveru)} igrača.\n{status}")
+
+          json.dump(stanje, open(STANJE, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+          KRAJ
+
+      - name: Sačuvaj stanje
+        run: |
+          if [ -n "$(git status --porcelain stanje.json)" ]; then
+            git config user.name "lionne-tracker"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add stanje.json
+            git commit -m "Promena statusa"
+            git push
+          fi
