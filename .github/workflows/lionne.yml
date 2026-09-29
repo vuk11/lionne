@@ -28,8 +28,8 @@ jobs:
 
       - name: Proveri server
         env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_TOKEN: ${{   8575511004:AAHJUitp36LpsKs1hzF8KCdZd-6-HiCHMcg }}
+          TELEGRAM_CHAT_ID: ${{   6576588374 }}
           SERVER_IP: "5.181.187.33"
           SERVER_PORT: "27018"
           IGRACI: "1 Lionne"          # više igrača odvojiti zarezom: "1 Lionne, Neko Drugi"
