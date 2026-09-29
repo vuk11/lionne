@@ -82,6 +82,10 @@ jobs:
                       time.sleep(3)
               raise poslednja
 
+          if not (TOKEN and CHAT):
+              print("Tajne TELEGRAM_TOKEN / TELEGRAM_CHAT_ID još nisu dodate, preskačem proveru.")
+              raise SystemExit(0)
+
           prvi_put = not os.path.exists(STANJE)
           stanje = {"online": {}} if prvi_put else json.load(open(STANJE, encoding="utf-8"))
 
