@@ -1,12 +1,15 @@
 name: Lionne tracker
 
 on:
+  workflow_dispatch:           # dugme "Run workflow"; svako pokretanje samo zakazuje sledeće (lanac)
+  push:
+    paths: [".github/workflows/lionne.yml"]   # posle izmene ovog fajla odmah krene
   schedule:
-    - cron: "*/10 * * * *"    # novo pokretanje na svakih 10 min; svako traje ~25 min, pa se nadovezuju
-  workflow_dispatch:           # dugme "Run workflow" za ručno pokretanje
+    - cron: "*/15 * * * *"    # rezerva: ako se lanac ikad prekine, GitHub ga ponovo pokrene
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: lionne-tracker
@@ -15,8 +18,13 @@ concurrency:
 jobs:
   proveri:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 350
     steps:
+      - name: Zakaži sledeće pokretanje (čeka dok se ovo ne završi)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run lionne.yml --repo "${{ github.repository }}" --ref main || echo "Nije uspelo zakazivanje, rezerva je raspored"
+
       - uses: actions/checkout@v4
         with:
           ref: main
@@ -36,7 +44,7 @@ jobs:
           SERVER_PORT: "27018"
           IGRACI: "1 Lionne"          # više igrača odvojiti zarezom: "1 Lionne, Neko Drugi"
           INTERVAL: "30"              # sekundi između provera
-          TRAJANJE: "25"              # koliko minuta jedno pokretanje prati server
+          TRAJANJE: "330"             # koliko minuta jedno pokretanje prati server (~5.5h)
         run: |
           python - <<'KRAJ'
           import os, json, time, subprocess, urllib.request, urllib.parse
@@ -115,18 +123,19 @@ jobs:
                   sada = time.time()
                   for ime in IGRACI:
                       k = norm(ime)
-                      if k in na_serveru and k not in stanje["online"]:
+                      nadjen = next((n for n in na_serveru if k in n), None)
+                      if nadjen and k not in stanje["online"]:
                           stanje["online"][k] = sada
                           promena = True
                           if not prvi_put:
                               posalji(f"🟢 {ime} je UŠAO na server ({sat()})")
-                      elif k not in na_serveru and k in stanje["online"]:
+                      elif not nadjen and k in stanje["online"]:
                           poceo = stanje["online"].pop(k)
                           promena = True
                           posalji(f"🔴 {ime} je IZAŠAO sa servera ({sat()}), igrao ~{trajanje(sada - poceo)}")
                   if prvi_put:
                       status = "\n".join(
-                          f"{'🟢 online' if norm(i) in na_serveru else '⚪ offline'}: {i}" for i in IGRACI
+                          f"{'🟢 online' if any(norm(i) in n for n in na_serveru) else '⚪ offline'}: {i}" for i in IGRACI
                       )
                       posalji(f"✅ Praćenje radi! Server odgovara, na njemu je {len(na_serveru)} igrača.\n{status}")
                       prvi_put = False
