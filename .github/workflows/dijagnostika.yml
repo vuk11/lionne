@@ -1,0 +1,43 @@
+name: Dijagnostika
+
+on:
+  workflow_dispatch:
+  push:
+    paths: [".github/workflows/dijagnostika.yml"]
+
+jobs:
+  proveri:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install python-a2s
+      - name: Jednokratna provera servera
+        run: |
+          python - <<'KRAJ'
+          import a2s, time
+          S = ("5.181.187.33", 27018)
+          def note(t, m):
+              m = str(m).replace("%", "%25").replace("\n", " | ")
+              print(f"::notice title={t}::{m}", flush=True)
+          try:
+              info = a2s.info(S, timeout=5)
+              note("info", f"{info.server_name} | mapa {info.map_name} | {info.player_count}/{info.max_players} igrača | botova {info.bot_count}")
+          except Exception as e:
+              note("info GREŠKA", repr(e))
+          for pokusaj in range(3):
+              try:
+                  try:
+                      pl = a2s.players(S, timeout=5, encoding="utf-8")
+                      imena = [p.name for p in pl]
+                  except UnicodeDecodeError:
+                      pl = a2s.players(S, timeout=5, encoding=None)
+                      imena = [p.name.decode("utf-8", "replace") for p in pl]
+                  note(f"igraci ({len(imena)})", ", ".join(repr(n) for n in imena) or "prazna lista")
+                  break
+              except Exception as e:
+                  note(f"igraci GREŠKA pokušaj {pokusaj+1}", repr(e))
+                  time.sleep(3)
+          KRAJ
