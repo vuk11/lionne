@@ -115,10 +115,21 @@ jobs:
           prvi_put = not os.path.exists(STANJE)
           stanje = {"online": {}} if prvi_put else json.load(open(STANJE, encoding="utf-8"))
 
+          def beleska(naslov, tekst):
+              # vidljivo u Actions i preko API-ja (annotations), za dijagnostiku
+              tekst = tekst.replace("%", "%25").replace("\r", " ").replace("\n", " | ")
+              print(f"::notice title={naslov}::{tekst}", flush=True)
+
+          poslednja_beleska = 0
+          greske_zaredom = 0
           while True:
               try:
                   na_serveru = igraci_na_serveru()
+                  greske_zaredom = 0
                   print(sat(), f"na serveru {len(na_serveru)}:", ", ".join(sorted(na_serveru)) or "niko", flush=True)
+                  if time.time() - poslednja_beleska > 3600:
+                      poslednja_beleska = time.time()
+                      beleska(f"{sat()} na serveru {len(na_serveru)}", ", ".join(repr(n) for n in sorted(na_serveru)) or "niko")
                   promena = False
                   sada = time.time()
                   for ime in IGRACI:
@@ -143,7 +154,10 @@ jobs:
                   if promena:
                       sacuvaj(stanje)
               except Exception as e:
+                  greske_zaredom += 1
                   print(sat(), "Server ne odgovara, preskačem ovu proveru:", repr(e), flush=True)
+                  if greske_zaredom in (1, 10, 60, 240):
+                      beleska(f"{sat()} server ne odgovara ({greske_zaredom}x zaredom)", repr(e))
 
               if time.time() + INTERVAL > KRAJ_RADA:
                   break
