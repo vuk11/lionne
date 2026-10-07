@@ -18,7 +18,7 @@ jobs:
         run: |
           python - <<'KRAJ'
           import a2s, time
-          S = ("5.181.187.33", 27018)
+          S = ("94.154.1.156", 27015)
           def note(t, m):
               m = str(m).replace("%", "%25").replace("\n", " | ")
               print(f"::notice title={t}::{m}", flush=True)

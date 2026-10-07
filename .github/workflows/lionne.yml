@@ -40,8 +40,8 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          SERVER_IP: "5.181.187.33"
-          SERVER_PORT: "27018"
+          SERVER_IP: "94.154.1.156"
+          SERVER_PORT: "27015"
           IGRACI: "1 Lionne"          # više igrača odvojiti zarezom: "1 Lionne, Neko Drugi"
           INTERVAL: "30"              # sekundi između provera
           TRAJANJE: "330"             # koliko minuta jedno pokretanje prati server (~5.5h)
